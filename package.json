@@ -1,0 +1,56 @@
+{
+  "name": "@adamscybot/modular-jsonata",
+  "description": "A lightweight wrapper for JSONata that introduces the concept of modules in order to easily & ergonomically extend it. Import other peoples JSONata modules and dynamically import them in your expressions. Define your own modules! for other people to use!.",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "lint": "eslint './src/**/*.ts'",
+    "prebuild": "",
+    "build": "tsc --project tsconfig.json"
+  },
+  "keywords": [
+    "jsonata",
+    "modular"
+  ],
+  "author": "adamscybot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamscybot/modular-jsonata.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adamscybot/modular-jsonata/issues"
+  },
+  "peerDependencies": {
+    "jsonata": "2.x.x"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.3.1",
+    "@typescript-eslint/parser": "^7.3.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "jsonata": "^2.0.4",
+    "jsonata-src": "github:jsonata-js/jsonata",
+    "prettier": "^3.2.5",
+    "semantic-release": "^23.0.5",
+    "typescript": "^5.4.3"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ]
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ts-custom-error": "^3.3.1"
+  }
+}

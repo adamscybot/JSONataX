@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "declaration": true,
+    "jsx": "react",
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext",
+    "target": "ES2020",
+    "lib": ["dom", "es2020"],
+    "outDir": "dist",
+    "allowSyntheticDefaultImports": true,
+    "downlevelIteration": true,
+    "noUnusedLocals": true
+  },
+  "include": ["./src/**/*"]
+}
