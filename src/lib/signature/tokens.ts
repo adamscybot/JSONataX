@@ -18,14 +18,17 @@ export const enum Enum {
   ReturnSeparator = 'ReturnSeparator',
 }
 
-export type TypeTokenChars = {
+export type GenericTypeTokenChars = {
   [Enum.ArrayType]: 'a'
+  [Enum.FunctionType]: 'f'
+}
+
+export type TypeTokenChars = GenericTypeTokenChars & {
   [Enum.BooleanType]: 'b'
   [Enum.NumberType]: 'n'
   [Enum.StringType]: 's'
   [Enum.NullType]: 'l'
   [Enum.ObjectType]: 'o'
-  [Enum.FunctionType]: 'f'
   [Enum.JsonType]: 'j'
   [Enum.AnyType]: 'x'
 }

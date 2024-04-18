@@ -1,5 +1,5 @@
 import type * as Tokens from './tokens.js'
-import type { CharOf, CharsOf, TokenOf, invalid } from './utils.js'
+import type { CharOf, PrintToken, TokenOf, invalid } from './utils.js'
 
 type TypeTokenMappings = {
   [Tokens.Enum.ArrayType]: Array<any>
@@ -22,7 +22,7 @@ type TypeTokenMappings = {
 type TsTypeFromChar<Char extends string> =
   TokenOf<Char> extends keyof TypeTokenMappings
     ? TypeTokenMappings[TokenOf<Char>]
-    : invalid<`Token '${Char}' is not a valid type token.`>
+    : invalid<`Char '${Char}' does not represent a valid type token.`>
 
 type SplitOnMatchingTerminator<
   S extends string,
@@ -44,7 +44,7 @@ type SplitOnMatchingTerminator<
     : TokenOf<Char> extends RToken
       ? L['length'] extends [0, ...R]['length']
         ? '' extends Accumulated
-          ? `Invalid empty '${CharOf<LToken>}${CharOf<RToken>}' found.`
+          ? `No type symbols between ${PrintToken<LToken>} and ${PrintToken<RToken>}' found.`
           : [`${Accumulated}`, Rest]
         : SplitOnMatchingTerminator<
             Rest,
@@ -62,7 +62,7 @@ type SplitOnMatchingTerminator<
           L,
           R
         >
-  : `Unterminated '${CharOf<LToken>}'`
+  : `Unterminated ${PrintToken<LToken>}`
 
 type SplitOnSubTypeTerminator<S extends string> = SplitOnMatchingTerminator<
   S,
@@ -84,12 +84,18 @@ type RawArraySigTokensToType<S extends string> = SigTokensToTypes<
   FirstChar<SplitOnSubTypeTerminator<S>[0]>,
   // Type args for arrays (`a<_>`) are limited to a subset currently.
   Tokens.Enum.JsonType | Tokens.Enum.AnyType
->
+>[AccumulatorIO.Params]
 
 type ArraySigTokensToType<S extends string> =
   invalid<any> extends RawArraySigTokensToType<S>
     ? RawArraySigTokensToType<S>
     : Array<RawArraySigTokensToType<S>[0]>
+
+type FunctionSigTokensToType<S extends string> = (
+  ...args: SigTokensToTypes<
+    SplitOnSubTypeTerminator<S>[0]
+  >[AccumulatorIO.Params]
+) => SigTokensToTypes<SplitOnSubTypeTerminator<S>[0]>[AccumulatorIO.Return][0] // Extra zero picks up only first symbol for return type
 
 type RawUnionSigTokensToType<S extends string> = SigTokensToTypes<
   SplitOnUnionTerminator<S>[0],
@@ -124,62 +130,102 @@ type ApplyOptionSigTokens<
       ? SpreadLastType<Types> // Represents one or more instances of Type
       : never
 
+enum AccumulatorIO {
+  Params = 0,
+  Return = 1,
+}
+
+type UpdateAccumulator<
+  Accumulator extends [any[], any[]],
+  Current extends AccumulatorIO,
+  Replacement extends any[],
+> = Current extends AccumulatorIO.Params
+  ? [Replacement, Accumulator[1]]
+  : [Accumulator[0], Replacement]
+
 type SigTokensToTypes<
   S extends string,
   RestrictedTokens extends Tokens.Enum = never,
-  AccumulatedParamTypes extends any[] = [],
-  AccumulatedReturnType extends any[] = [],
+  CurrentAccumulator extends AccumulatorIO = AccumulatorIO.Params,
+  AccumulatedTypes extends [any[], any[]] = [[], []],
 > = S extends `${infer Char}${infer Rest}`
   ? TokenOf<Char> extends RestrictedTokens
-    ? invalid<`Token '${Char}' can not be used here '${Char}${Rest}'`>
+    ? invalid<`Token ${PrintToken<TokenOf<Char>>} can not be used here.`>
     : TokenOf<Char> extends keyof Tokens.ModifierTokenChars
       ? SigTokensToTypes<
           Rest,
           RestrictedTokens,
-          ApplyOptionSigTokens<AccumulatedParamTypes, TokenOf<Char>>,
-          AccumulatedReturnType
+          CurrentAccumulator,
+          UpdateAccumulator<
+            AccumulatedTypes,
+            CurrentAccumulator,
+            ApplyOptionSigTokens<
+              AccumulatedTypes[CurrentAccumulator],
+              TokenOf<Char>
+            >
+          >
         >
-      : TokenOf<Char> extends Tokens.Enum.ArrayType
+      : TokenOf<Char> extends keyof Tokens.GenericTypeTokenChars
         ? Rest extends `${CharOf<Tokens.Enum.SubTypeOpen>}${infer AfterTypeParamOpen}`
           ? SigTokensToTypes<
               SplitOnSubTypeTerminator<AfterTypeParamOpen>[1],
               RestrictedTokens,
-              [
-                ...AccumulatedParamTypes,
-                ArraySigTokensToType<AfterTypeParamOpen>,
-              ],
-              AccumulatedReturnType
+              CurrentAccumulator,
+              UpdateAccumulator<
+                AccumulatedTypes,
+                CurrentAccumulator,
+                [
+                  ...AccumulatedTypes[CurrentAccumulator],
+                  TokenOf<Char> extends Tokens.Enum.ArrayType
+                    ? ArraySigTokensToType<AfterTypeParamOpen>
+                    : TokenOf<Char> extends Tokens.Enum.FunctionType
+                      ? FunctionSigTokensToType<AfterTypeParamOpen>
+                      : never,
+                ]
+              >
             >
           : SigTokensToTypes<
               Rest,
               RestrictedTokens,
-              [...AccumulatedParamTypes, TsTypeFromChar<Char>],
-              AccumulatedReturnType
+              CurrentAccumulator,
+              UpdateAccumulator<
+                AccumulatedTypes,
+                CurrentAccumulator,
+                [...AccumulatedTypes[CurrentAccumulator], TsTypeFromChar<Char>]
+              >
             >
         : TokenOf<Char> extends Tokens.Enum.UnionOpen
-          ? SigTokensToTypes<
-              SplitOnUnionTerminator<Rest>[1],
-              RestrictedTokens,
-              [...AccumulatedParamTypes, UnionSigTokensToType<Rest>],
-              AccumulatedReturnType
-            >
+          ? SigTokensToTypes<SplitOnUnionTerminator<Rest>[1], RestrictedTokens>
           : TokenOf<Char> extends Tokens.Enum.SubTypeOpen
             ? [
-                invalid<`Type parameter opening bracket ('<') token can only be specified immediately after 'a' or 'f' tokens.`>,
+                invalid<`Token ${PrintToken<Tokens.Enum.SubTypeOpen>} can only be specified immediately after ${PrintToken<Tokens.Enum.ArrayType>} or ${PrintToken<Tokens.Enum.FunctionType>} tokens.`>,
               ]
             : TokenOf<Char> extends Tokens.Enum.SubTypeClose
               ? [
-                  invalid<`Type parameters terminator ('>') token found without matching opener ('<') token.`>,
+                  invalid<`Token ${PrintToken<Tokens.Enum.SubTypeClose>} token found without matching opener ${PrintToken<Tokens.Enum.SubTypeOpen>} token.`>,
                 ]
               : TokenOf<Char> extends Tokens.Enum.ReturnSeparator
-                ? 's'
+                ? SigTokensToTypes<
+                    Rest,
+                    RestrictedTokens,
+                    AccumulatorIO.Return,
+                    AccumulatedTypes
+                  >
                 : SigTokensToTypes<
                     Rest,
                     RestrictedTokens,
-                    [...AccumulatedParamTypes, TsTypeFromChar<Char>],
-                    AccumulatedReturnType
+                    CurrentAccumulator,
+                    UpdateAccumulator<
+                      AccumulatedTypes,
+                      CurrentAccumulator,
+                      [
+                        ...AccumulatedTypes[CurrentAccumulator],
+                        TsTypeFromChar<Char>,
+                      ]
+                    >
                   >
-  : AccumulatedParamTypes
+  : AccumulatedTypes
 
-type test = SigTokensToTypes<'(snoa<a>)'>
+type test = SigTokensToTypes<'s-f<s:o>n?:o'>[1]
+type tes2t = SigTokensToTypes<'a<b>:sb'>
 type lol = TsTypeFromChar<'v'>

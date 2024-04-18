@@ -9,9 +9,6 @@ export type invalid<ErrorMessage> = (
   ..._: (typeof InvalidTypeSymbol)[]
 ) => typeof InvalidTypeSymbol
 
-export type CharsOf<TokenMap extends Record<string, string>> =
-  TokenMap[keyof TokenMap]
-
 export type CharOf<Token extends Tokens.Enum> = Tokens.TokenChars[Token]
 
 type ReverseLookup<T, V> = {
@@ -23,3 +20,6 @@ export type TokenOf<Char extends string> =
   ReverseLookup<Tokens.TokenChars, Char> extends never
     ? invalid<`Token '${Char}' is not a valid type token.`>
     : ReverseLookup<Tokens.TokenChars, Char>
+
+export type PrintToken<Token extends Tokens.Enum> =
+  `${Token} ('${CharOf<Token>}')`
