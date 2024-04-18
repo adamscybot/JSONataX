@@ -2,7 +2,7 @@ import { defineModule } from './define.js'
 import { modularJsonata } from './evaluator.js'
 const module = defineModule('lol')
   .description('Does some things')
-  .export('example', '<a<j>>', function (lol) {
+  .export('example', '<(z)>', function (lol) {
     return 'ok'
   })
   // .export('yay', '<s-:n>', function (input) {
@@ -23,7 +23,7 @@ console.log(module)
              /* aProperty.$rRet('lol').example($.example('test2'), 'test') */
             /* $rRet('lol').example($.example($$.aProperty[0], 'test2'), 'test')   */
 
-            $rRet('lol').example(['true']);
+            $rRet('lol').example(1);
            /* bProperty.$rRet('lol').example($.example('test2'), 'test');*/
             
 

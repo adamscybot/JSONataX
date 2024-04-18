@@ -103,6 +103,15 @@ type SigTokensToTuple<
         : [...Acc, invalid<`Invalid token found \`${Token}\``>]
       : Acc
 
+const InvalidTypeSymbol = Symbol(`Invalid type`)
+export type invalid<ErrorMessage> = (
+  // ErrorMessage doesn't need to be used here, except that using it allows
+  // TypeScript to print the passed message instead of just "ErrorMessage"
+  // in certain cases.
+  invalidType: ErrorMessage & typeof InvalidTypeSymbol,
+  ..._: (typeof InvalidTypeSymbol)[]
+) => typeof InvalidTypeSymbol
+
 type ExtractInnerSignatureStr<SignatureStr extends string> =
   SignatureStr extends `<${infer InnerSignatureStr}>`
     ? InnerSignatureStr
@@ -168,18 +177,6 @@ export type ParamsFromSignature<SignatureStr extends string> = MakeOptional<
     ExtractParamSignatureStr<ExtractInnerSignatureStr<SignatureStr>>
   >
 >
-
-const InvalidTypeSymbol = Symbol(`Invalid type`)
-export type invalid<ErrorMessage> =
-  | ((
-      // ErrorMessage doesn't need to be used here, except that using it allows
-      // TypeScript to print the passed message instead of just "ErrorMessage"
-      // in certain cases.
-      invalidType: ErrorMessage & typeof InvalidTypeSymbol,
-      ..._: (typeof InvalidTypeSymbol)[]
-    ) => typeof InvalidTypeSymbol)
-  | null
-  | undefined
 
 /**
  * Given a JSonata signature string, extract the union type that represents the declared return type.
