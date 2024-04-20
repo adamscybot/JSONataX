@@ -18,7 +18,7 @@ type ReverseLookup<T, V> = {
 // TokenFor type for looking up Enum based on character
 export type TokenOf<Char extends string> =
   ReverseLookup<Tokens.TokenChars, Char> extends never
-    ? invalid<`Token '${Char}' is not a valid type token.`>
+    ? never
     : ReverseLookup<Tokens.TokenChars, Char>
 
 export type PrintToken<Token extends Tokens.Enum> =
