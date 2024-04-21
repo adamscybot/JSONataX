@@ -1,5 +1,9 @@
+import type * as Errors from './errors.js'
 import type * as Tokens from './tokens.js'
-import type { CharOf, PrintToken, TokenOf, invalid } from './utils.js'
+
+type NonArrayNonNullObject = {
+  [key: string]: any
+} & object
 
 /**
  * Mappings between tokens that represent types and the underlying
@@ -11,7 +15,7 @@ type TypeTokenMappings = {
   [Tokens.Enum.NumberType]: number
   [Tokens.Enum.StringType]: string
   [Tokens.Enum.NullType]: null
-  [Tokens.Enum.ObjectType]: object
+  [Tokens.Enum.ObjectType]: NonArrayNonNullObject
   [Tokens.Enum.FunctionType]: (...args: any) => any
   [Tokens.Enum.JsonType]: boolean | number | string | null | object
   [Tokens.Enum.AnyType]:
@@ -30,6 +34,9 @@ type TypeTokenMappings = {
  *
  * Additionally ensures that there is at least one symbol between the delimiters
  * and will also error if the delimiters are unbalanced.
+ *
+ * This utility is somewhat special as it handles the only semantics in the signature
+ * syntax that brings about an unbound lookahead.
  */
 type SplitOnMatchingTerminator<
   S extends string,
@@ -41,7 +48,7 @@ type SplitOnMatchingTerminator<
   L extends any[] = [0],
   R extends any[] = [],
 > = S extends `${infer Char}${infer Rest}`
-  ? TokenOf<Char> extends LToken
+  ? Tokens.TokenOf<Char> extends LToken
     ? SplitOnMatchingTerminator<
         Rest,
         LToken,
@@ -50,11 +57,16 @@ type SplitOnMatchingTerminator<
         [0, ...L],
         R
       >
-    : TokenOf<Char> extends RToken
+    : Tokens.TokenOf<Char> extends RToken
       ? L['length'] extends [0, ...R]['length']
         ? '' extends Accumulated
-          ? `No inner tokens between ${PrintToken<LToken>} and ${PrintToken<RToken>}' found.`
-          : [`${Accumulated}`, Rest]
+          ? [
+              Accumulated & {
+                error: Errors.EmptyDelimitedStringError<LToken, RToken>
+              },
+              Rest,
+            ]
+          : [Accumulated, Rest]
         : SplitOnMatchingTerminator<
             Rest,
             LToken,
@@ -71,7 +83,12 @@ type SplitOnMatchingTerminator<
           L,
           R
         >
-  : `Unterminated ${PrintToken<LToken>}`
+  : [
+      Accumulated & {
+        error: Errors.UnterminatedOpenDelimiterError<LToken, RToken>
+      },
+      S,
+    ]
 
 /**
  * Wrapped version of {@link SplitOnMatchingTerminator} for matching sub type
@@ -93,10 +110,6 @@ type SplitOnUnionTerminator<S extends string> = SplitOnMatchingTerminator<
   Tokens.Enum.UnionClose
 >
 
-type FirstChar<S extends string> = S extends `${infer Char}${infer Rest}`
-  ? Char
-  : never
-
 type AppendUnionToLastType<T extends any[], U> = T extends [...infer R, infer L]
   ? [...R, L | U]
   : never
@@ -115,21 +128,45 @@ const enum AccumulatorIoType {
 }
 
 type ParserStateType = {
+  /** String that has already been processed up to this point. Used for better compile errors. */
+  chomped: string
+  /** Both the currently inferred TS parameter types and the return types */
   accumulators: [any[], any[]]
+  /** Whether the param types or return types are currently being processed */
   currentAccumulator: AccumulatorIoType
-  error: invalid<any> | undefined
+  /**
+   * Tokens which can not currently be used. Restrains certain tokens that are not allowed
+   * in some contexts.
+   */
+  restrictedTokens: Tokens.Enum | never
+  /**
+   * A detailed parsing error. `undefined` if this is valid state.
+   */
+  error: string | undefined
 }
 
-type DefaultParserState = {
+type NewParserState<RestrictedTokens extends Tokens.Enum | never = never> = {
+  chomped: ''
   accumulators: [[], []]
   currentAccumulator: AccumulatorIoType.Params
+  restrictedTokens: RestrictedTokens
   error: undefined
 }
 
 type InvalidateState<State extends ParserStateType, ErrMsg extends string> = {
+  chomped: State['chomped']
   accumulators: State['accumulators']
   currentAccumulator: State['currentAccumulator']
-  error: invalid<ErrMsg>
+  restrictedTokens: State['restrictedTokens']
+  error: `Error parsing signature. ${ErrMsg}.`
+}
+
+type AppendChomped<State extends ParserStateType, Chars extends string> = {
+  chomped: `${State['chomped']}${Chars}`
+  accumulators: State['accumulators']
+  currentAccumulator: State['currentAccumulator']
+  restrictedTokens: State['restrictedTokens']
+  error: State['error']
 }
 
 type GetCurrentAccumulator<State extends ParserStateType> =
@@ -147,44 +184,59 @@ type ReplaceCurrentAccumulator<
   State extends ParserStateType,
   NewAccumulator extends any[],
 > = {
+  chomped: State['chomped']
   accumulators: State['currentAccumulator'] extends AccumulatorIoType.Params
     ? [NewAccumulator, State['accumulators'][AccumulatorIoType.Return]]
     : [State['accumulators'][AccumulatorIoType.Params], NewAccumulator]
   currentAccumulator: State['currentAccumulator']
+  restrictedTokens: State['restrictedTokens']
   error: State['error']
 }
 
-type AppendCurrentAccumulator<State extends ParserStateType, Append> = {
-  accumulators: State['currentAccumulator'] extends AccumulatorIoType.Params
-    ? [
-        [...State['accumulators'][AccumulatorIoType.Params], Append],
-        State['accumulators'][AccumulatorIoType.Return],
-      ]
-    : [
-        State['accumulators'][AccumulatorIoType.Params],
-        [...State['accumulators'][AccumulatorIoType.Return], Append],
-      ]
-  currentAccumulator: State['currentAccumulator']
-  error: State['error']
-}
+type AppendCurrentAccumulator<
+  State extends ParserStateType,
+  Append,
+  AppendedState = {
+    chomped: State['chomped']
+    accumulators: State['currentAccumulator'] extends AccumulatorIoType.Params
+      ? [
+          [...State['accumulators'][AccumulatorIoType.Params], Append],
+          State['accumulators'][AccumulatorIoType.Return],
+        ]
+      : [
+          State['accumulators'][AccumulatorIoType.Params],
+          [...State['accumulators'][AccumulatorIoType.Return], Append],
+        ]
+    currentAccumulator: State['currentAccumulator']
+    restrictedTokens: State['restrictedTokens']
+    error: State['error']
+  },
+> = State['currentAccumulator'] extends AccumulatorIoType.Return
+  ? GetReturnAccumulator<State> extends [any]
+    ? InvalidateState<State, Errors.MultipleReturnTypesError>
+    : AppendedState
+  : AppendedState
 
 type SetCurrentAccumulator<
   State extends ParserStateType,
   To extends AccumulatorIoType,
-> = Omit<State, 'currentAccumulator'> & { currentAccumulator: To }
+> = {
+  chomped: State['chomped']
+  accumulators: State['accumulators']
+  currentAccumulator: To
+  restrictedTokens: State['restrictedTokens']
+  error: State['error']
+}
 
 type IsStateInvalid<State extends ParserStateType> =
-  invalid<any> extends GetError<State> ? true : false
+  GetError<State> extends string ? true : false
 
 type ProcessModifier<
   State extends ParserStateType,
   ModifierToken extends keyof Tokens.ModifierTokenChars,
 > =
   GetCurrentAccumulator<State> extends []
-    ? InvalidateState<
-        State,
-        `${PrintToken<ModifierToken>} can only appear after a type token`
-      >
+    ? InvalidateState<State, Errors.ModifierWithoutTypeError<ModifierToken>>
     : ModifierToken extends Tokens.Enum.OptionalModifier
       ? // We add explicit undefined here, but `ParamsFromSignature` adds it to all args anyway later
         // because any arg is allowed to be set to `undefined` explicitly and JSonata does not currently
@@ -195,12 +247,23 @@ type ProcessModifier<
           AppendUnionToLastType<GetCurrentAccumulator<State>, undefined>
         >
       : ModifierToken extends Tokens.Enum.ContextAwareModifier
-        ? State // Nothing to be done since JSonata makes sure the context type matches
-        : ModifierToken extends Tokens.Enum.OneOrMoreModifier
-          ? ReplaceCurrentAccumulator<
+        ? State['currentAccumulator'] extends AccumulatorIoType.Return
+          ? InvalidateState<
               State,
-              SpreadLastType<GetCurrentAccumulator<State>>
+              Errors.ModifierOnReturnTypeError<ModifierToken>
             >
+          : // Nothing to be done since JSonata makes sure the context type matches
+            State
+        : ModifierToken extends Tokens.Enum.OneOrMoreModifier
+          ? State['currentAccumulator'] extends AccumulatorIoType.Return
+            ? InvalidateState<
+                State,
+                Errors.ModifierOnReturnTypeError<ModifierToken>
+              >
+            : ReplaceCurrentAccumulator<
+                State,
+                SpreadLastType<GetCurrentAccumulator<State>>
+              >
           : never
 
 type StageChildStateType = {
@@ -212,7 +275,10 @@ type StageChildState<
   State extends ParserStateType,
   InnerState extends ParserStateType,
 > = {
-  parent: Omit<State, 'error'> & { error: InnerState['error'] }
+  parent: AppendChomped<
+    Omit<State, 'error'> & { error: InnerState['error'] },
+    InnerState['chomped']
+  >
   child: InnerState
 }
 
@@ -221,9 +287,12 @@ type ProcessSubTypedArray<
   SubTypeString extends string,
   StagedState extends StageChildStateType = StageChildState<
     State,
-    SignatureToRawTuple<
-      FirstChar<SubTypeString>,
-      Tokens.Enum.JsonType | Tokens.Enum.AnyType
+    AppendChomped<
+      ProcessSig<
+        SubTypeString,
+        NewParserState<Tokens.Enum.JsonType | Tokens.Enum.AnyType>
+      >,
+      Tokens.CharOf<Tokens.Enum.SubTypeClose>
     >
   >,
 > = AppendCurrentAccumulator<
@@ -236,61 +305,136 @@ type ProcessSubTypedFunction<
   SubTypeString extends string,
   StagedState extends StageChildStateType = StageChildState<
     State,
-    SignatureToRawTuple<SubTypeString>
-  >,
-> =
-  GetReturnAccumulator<StagedState['child']> extends [any, ...any[]]
-    ? GetReturnAccumulator<StagedState['child']> extends [any, any, ...any[]]
-      ? InvalidateState<
-          AppendCurrentAccumulator<
-            StagedState['parent'],
-            (...args: unknown[]) => unknown
-          >,
-          'Only one return token can be specified'
-        >
-      : AppendCurrentAccumulator<
-          StagedState['parent'],
-          (
-            ...args: GetParamAccumulator<StagedState['child']>
-          ) => GetReturnAccumulator<StagedState['child']>[0]
-        >
-    : AppendCurrentAccumulator<
-        StagedState['parent'],
-        (...args: GetParamAccumulator<StagedState['child']>) => any
-      >
-
-type ProcessSubTypedType<
-  State extends ParserStateType,
-  TypeToken extends keyof Tokens.GenericTypeTokenChars,
-  SubTypeString extends string,
-> = TypeToken extends Tokens.Enum.ArrayType
-  ? ProcessSubTypedArray<State, SubTypeString>
-  : TypeToken extends Tokens.Enum.FunctionType
-    ? ProcessSubTypedFunction<State, SubTypeString>
-    : never
-
-type ProcessUnion<
-  State extends ParserStateType,
-  UnionString extends string,
-  StagedState extends StageChildStateType = StageChildState<
-    State,
-    SignatureToRawTuple<
-      UnionString,
-      keyof Tokens.ModifierTokenChars | keyof Tokens.DelimiterTokenChars
+    AppendChomped<
+      ProcessSig<SubTypeString>,
+      Tokens.CharOf<Tokens.Enum.SubTypeClose>
     >
   >,
 > = AppendCurrentAccumulator<
   StagedState['parent'],
-  GetParamAccumulator<StagedState['child']>[number]
+  StateToFn<StagedState['child']>
 >
 
+type ProcessSubTypedType<
+  State extends ParserStateType,
+  TypeToken extends keyof Tokens.GenericTypeTokenChars,
+  SubTypeString extends string & { error?: string },
+> = SubTypeString['error'] extends string
+  ? InvalidateState<State, SubTypeString['error']>
+  : TypeToken extends Tokens.Enum.ArrayType
+    ? ProcessSubTypedArray<State, SubTypeString>
+    : TypeToken extends Tokens.Enum.FunctionType
+      ? ProcessSubTypedFunction<State, SubTypeString>
+      : never
+
+type ProcessUnion<
+  State extends ParserStateType,
+  UnionString extends string & { error?: string },
+  StagedState extends StageChildStateType = StageChildState<
+    State,
+    AppendChomped<
+      ProcessSig<
+        UnionString,
+        NewParserState<
+          keyof Tokens.ModifierTokenChars | keyof Tokens.DelimiterTokenChars
+        >
+      >,
+      Tokens.CharOf<Tokens.Enum.UnionClose>
+    >
+  >,
+> = UnionString['error'] extends string
+  ? InvalidateState<State, UnionString['error']>
+  : AppendCurrentAccumulator<
+      StagedState['parent'],
+      GetParamAccumulator<StagedState['child']>[number]
+    >
+
 type ProcessReturnDelimiter<State extends ParserStateType> =
-  SetCurrentAccumulator<State, AccumulatorIoType.Return>
+  State['currentAccumulator'] extends AccumulatorIoType.Return
+    ? InvalidateState<State, Errors.InvalidReturnDelimiterError>
+    : SetCurrentAccumulator<State, AccumulatorIoType.Return>
 
 type ProcessSingleType<
   State extends ParserStateType,
   TypeToken extends keyof TypeTokenMappings,
 > = AppendCurrentAccumulator<State, TypeTokenMappings[TypeToken]>
+
+type StateToFn<State extends ParserStateType> =
+  GetReturnAccumulator<State> extends [any, ...any[]]
+    ? (...args: GetParamAccumulator<State>) => GetReturnAccumulator<State>[0]
+    : (...args: GetParamAccumulator<State>) => any
+
+type WithCheckedRestrictions<
+  State extends ParserStateType,
+  Token extends Tokens.Enum,
+> = Token extends State['restrictedTokens']
+  ? InvalidateState<State, Errors.RestrictedTokenError<Token>>
+  : State
+
+type ProcessSigChar<
+  Char extends string,
+  Rest extends string,
+  State extends ParserStateType,
+> =
+  Tokens.TokenOf<Char> extends State['restrictedTokens']
+    ? InvalidateState<State, Errors.RestrictedTokenError<Tokens.TokenOf<Char>>>
+    : // Case where the token represents a modifier
+      Tokens.TokenOf<Char> extends keyof Tokens.ModifierTokenChars
+      ? ProcessSig<Rest, ProcessModifier<State, Tokens.TokenOf<Char>>>
+      : // Case where a parameterisable token is encountered
+        Tokens.TokenOf<Char> extends keyof Tokens.GenericTypeTokenChars
+        ? // Case where a parameterisable token is encountered, and a parameter is specified
+          Rest extends `${Tokens.CharOf<Tokens.Enum.SubTypeOpen>}${infer AfterTypeParamOpen}`
+          ? ProcessSig<
+              SplitOnSubTypeTerminator<AfterTypeParamOpen>[1],
+              ProcessSubTypedType<
+                AppendChomped<
+                  State,
+                  `${Tokens.CharOf<Tokens.Enum.SubTypeOpen>}`
+                >,
+                Tokens.TokenOf<Char>,
+                SplitOnSubTypeTerminator<AfterTypeParamOpen>[0]
+              >
+            >
+          : // Case where a parameterisable symbol is used without any parameters.
+            ProcessSig<Rest, ProcessSingleType<State, Tokens.TokenOf<Char>>>
+        : // Case where a union is encountered
+          Tokens.TokenOf<Char> extends Tokens.Enum.UnionOpen
+          ? ProcessSig<
+              SplitOnUnionTerminator<Rest>[1],
+              ProcessUnion<State, SplitOnUnionTerminator<Rest>[0]>
+            > // Case where a return delimiter is encountered and we should populate the second inner tuple from
+          : // this point onwards
+            Tokens.TokenOf<Char> extends Tokens.Enum.ReturnSeparator
+            ? ProcessSig<Rest, ProcessReturnDelimiter<State>> // Case where a token representing a single type is encountered
+            : Tokens.TokenOf<Char> extends keyof TypeTokenMappings
+              ? ProcessSig<Rest, ProcessSingleType<State, Tokens.TokenOf<Char>>>
+              : // Case where a sub type open token is encountered, but not following a non parameterisable type.
+                // Valid uses of this token are captured in an earlier case.
+                Tokens.TokenOf<Char> extends Tokens.Enum.SubTypeOpen
+                ? InvalidateState<State, Errors.InvalidSubTypeOpenError>
+                : // Case where a sub type close token is encountered, but there was no matching open token.
+                  // Cases where there is an open token are swallowed as part of `SplitOnSubTypeTerminator` in an earlier case.
+                  Tokens.TokenOf<Char> extends Tokens.Enum.SubTypeClose
+                  ? InvalidateState<
+                      State,
+                      Errors.UnmatchedCloseDelimiterError<
+                        Tokens.Enum.SubTypeOpen,
+                        Tokens.Enum.SubTypeClose
+                      >
+                    >
+                  : // Case where a union close token is encountered, but there was no matching open token.
+                    // Cases where there is an open token are swallowed as part of `SplitOnSubTypeTerminator` in an earlier case.
+                    Tokens.TokenOf<Char> extends Tokens.Enum.UnionClose
+                    ? InvalidateState<
+                        State,
+                        Errors.UnmatchedCloseDelimiterError<
+                          Tokens.Enum.UnionOpen,
+                          Tokens.Enum.UnionClose
+                        >
+                      >
+                    : // Unknown character encountered
+                      InvalidateState<State, Errors.UnknownCharError<Char>>
 
 /**
  * The core of the compile time signature parser. Given the inner part of a
@@ -302,102 +446,44 @@ type ProcessSingleType<
  * 2. The second element is a nested tuple that represents the types of the return
  *    of that signature. I.e. on the rhs of the `:`.
  */
-type SignatureToRawTuple<
+type ProcessSig<
   S extends string,
-  RestrictedTokens extends Tokens.Enum = never,
-  State extends ParserStateType = DefaultParserState,
+  State extends ParserStateType = NewParserState,
 > =
   IsStateInvalid<State> extends true
-    ? State
+    ? // Exit early if the state is invalid
+      State
     : // Extract the next character to process
       S extends `${infer Char}${infer Rest}`
-      ? TokenOf<Char> extends RestrictedTokens
-        ? InvalidateState<
-            State,
-            `Token ${PrintToken<TokenOf<Char>>} can not be used here.`
-          >
-        : // Case where the token represents a modifier
-          TokenOf<Char> extends keyof Tokens.ModifierTokenChars
-          ? SignatureToRawTuple<
-              Rest,
-              RestrictedTokens,
-              ProcessModifier<State, TokenOf<Char>>
-            >
-          : // Case where a parameterisable token is encountered
-            TokenOf<Char> extends keyof Tokens.GenericTypeTokenChars
-            ? // Case where a parameterisable token is encountered, and a parameter is specified
-              Rest extends `${CharOf<Tokens.Enum.SubTypeOpen>}${infer AfterTypeParamOpen}`
-              ? SignatureToRawTuple<
-                  SplitOnSubTypeTerminator<AfterTypeParamOpen>[1],
-                  RestrictedTokens,
-                  ProcessSubTypedType<
-                    State,
-                    TokenOf<Char>,
-                    SplitOnSubTypeTerminator<AfterTypeParamOpen>[0]
-                  >
-                >
-              : // Case where a parameterisable symbol is used without any parameters.
-                SignatureToRawTuple<
-                  Rest,
-                  RestrictedTokens,
-                  ProcessSingleType<State, TokenOf<Char>>
-                >
-            : // Case where a union is encountered
-              TokenOf<Char> extends Tokens.Enum.UnionOpen
-              ? SignatureToRawTuple<
-                  SplitOnUnionTerminator<Rest>[1],
-                  RestrictedTokens,
-                  ProcessUnion<State, SplitOnUnionTerminator<Rest>[0]>
-                >
-              : // Case where a sub type open token is encountered, but following a non parameterisable type.
-                // Valid uses of this token are captured in an earlier case.
-                TokenOf<Char> extends Tokens.Enum.SubTypeOpen
-                ? InvalidateState<
-                    State,
-                    `Token ${PrintToken<Tokens.Enum.SubTypeOpen>} can only be specified immediately after ${PrintToken<Tokens.Enum.ArrayType>} or ${PrintToken<Tokens.Enum.FunctionType>} tokens.`
-                  >
-                : // Case where a sub type close token is encountered, but there was no matching open token.
-                  // Cases where there is an open token are swallowed as part of `SplitOnSubTypeTerminator` in an earlier case.
-                  TokenOf<Char> extends Tokens.Enum.SubTypeClose
-                  ? InvalidateState<
-                      State,
-                      `Token ${PrintToken<Tokens.Enum.SubTypeClose>} token found without matching opener ${PrintToken<Tokens.Enum.SubTypeOpen>} token.`
-                    >
-                  : // Case where a return delimiter is encountered and we should populate the second inner tuple from
-                    // this point onwards
-                    TokenOf<Char> extends Tokens.Enum.ReturnSeparator
-                    ? SignatureToRawTuple<
-                        Rest,
-                        | keyof Tokens.ModifierTokenChars
-                        | Tokens.Enum.ReturnSeparator,
-                        ProcessReturnDelimiter<State>
-                      >
-                    : // Case where a token representing a single type is encountered
-                      TokenOf<Char> extends keyof TypeTokenMappings
-                      ? SignatureToRawTuple<
-                          Rest,
-                          RestrictedTokens,
-                          ProcessSingleType<State, TokenOf<Char>>
-                        >
-                      : // Unknown character encountered
-                        InvalidateState<
-                          State,
-                          `Character '${Char}' is not a valid type token.`
-                        >
+      ? ProcessSigChar<Char, Rest, AppendChomped<State, Char>>
       : State
 
+type UnwrapSignature<S extends string> =
+  S extends `${Tokens.CharOf<Tokens.Enum.SubTypeOpen>}${infer Inner}${Tokens.CharOf<Tokens.Enum.SubTypeClose>}`
+    ? Inner
+    : undefined
+
+type ParseSignature<
+  S extends string,
+  UnwrappedSignature extends string | undefined = UnwrapSignature<S>,
+> = UnwrappedSignature extends string
+  ? IsStateInvalid<ProcessSig<UnwrappedSignature>> extends true
+    ? Errors.FormatError<
+        ProcessSig<UnwrappedSignature>['error'],
+        UnwrappedSignature,
+        ProcessSig<UnwrappedSignature>['chomped']
+      >
+    : StateToFn<ProcessSig<UnwrappedSignature>>
+  : [Errors.invalid<Errors.SignatureNotWrappedError>]
+
 // Cant restrict < and > properly
-// modifiers should not be allowed on return types
 // do function types allow x or j
 // disallow union inside < (or other way around)
-// disallow : after :
-// unknown token error
-// error should surface to top level
-// x and j broke cos of invalid crossover
 // error in function subtype not surfacing as desired
-// return type of o is messed up probably because it extends inbvalicv
 
-type test = SignatureToRawTuple<'g'>
+type test = ParseSignature<'<n-s?s?:s>'>
+
+type lol = ProcessSig<'sssd'>
 
 const lolz = 'asd' as unknown as test
 const asddas = lolz(
@@ -408,4 +494,4 @@ const asddas = lolz(
   1,
 )
 
-type tes2t = SignatureToRawTuple<'sa<b>:sb'>
+type tes2t = ProcessSig<'sa<b>:sb'>

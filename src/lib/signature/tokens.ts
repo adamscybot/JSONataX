@@ -50,3 +50,17 @@ export type DelimiterTokenChars = {
 export type TokenChars = TypeTokenChars &
   ModifierTokenChars &
   DelimiterTokenChars
+
+export type CharOf<Token extends Enum> = TokenChars[Token]
+
+type ReverseLookup<T, V> = {
+  [P in keyof T]: T[P] extends V ? P : never
+}[keyof T]
+
+// TokenFor type for looking up Enum based on character
+export type TokenOf<Char extends string> =
+  ReverseLookup<TokenChars, Char> extends never
+    ? never
+    : ReverseLookup<TokenChars, Char>
+
+export type PrintToken<Token extends Enum> = `${Token} '${CharOf<Token>}'`
