@@ -4,10 +4,10 @@ import {
   type JsonataModule,
   type BindModuleOpts,
   createModule,
-} from './module.js'
+} from './module/module.js'
 import { customErrorFactory } from 'ts-custom-error'
 import { prefixedString } from './lib/str-utils.js'
-import { type JsonataModuleDef } from './lib/types.js'
+import { type JsonataModuleDef } from './module/define/types.js'
 
 export interface ModularJsonataExpressionOpts extends JsonataOptions {
   /**
@@ -146,7 +146,7 @@ export const modularJsonata = ({
         registerRequireFn(
           '',
           function (module, opts: BindModuleOpts) {
-            module.bindToGlobal(this, opts)
+            module.bindExportsToGlobal(this, opts)
           },
           '<so?:o>',
         )
@@ -162,36 +162,12 @@ export const modularJsonata = ({
         registerRequireFn(
           'Scoped',
           function (module, lambda) {
-            module.bindToGlobal(this, {})
+            module.bindExportsToGlobal(this, {})
 
             return lambda()
           },
           '<so?:o>',
         )
-
-        // baseExpression.registerFunction(
-        //   // used to be called bind
-        //   includeHelperName + 'Alias',
-        //   function (moduleId) {
-        //     modules
-        //       .find((module) => module.id === moduleId)!
-        //       .fns.forEach(({ implementation, name, signature }) => {
-        //         this.environment.bind(
-        //           `${moduleId}_${name}`,
-        //           function (this: jsonata.Focus, ...args: any[]) {
-        //             const validatedArgs = signatureValidator(
-        //               signature!,
-        //             ).validate(args, this.input)
-
-        //             return implementation.apply(this, validatedArgs)
-        //           }.bind(this),
-        //         )
-        //       })
-
-        //     return this.input
-        //   },
-        //   '<s:x>',
-        // )
 
         return {
           /**
@@ -205,7 +181,7 @@ export const modularJsonata = ({
            * @returns The expression wrapper
            */
           injectModule(id: T[number]['_def']['id'], opts?: BindModuleOpts) {
-            moduleById(id).bindToExpression(baseExpression, opts)
+            moduleById(id).bindExportsToExpression(baseExpression, opts)
             return this
           },
 
@@ -220,7 +196,9 @@ export const modularJsonata = ({
            * @returns The expression wrapper
            */
           injectAllModules() {
-            modules.forEach((module) => module.bindToExpression(baseExpression))
+            modules.forEach((module) =>
+              module.bindExportsToExpression(baseExpression),
+            )
             return this
           },
 

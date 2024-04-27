@@ -4,6 +4,7 @@ module.exports = {
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:prettier/recommended',
+    'plugin:security/recommended-legacy',
   ],
   plugins: ['@typescript-eslint'],
   rules: {

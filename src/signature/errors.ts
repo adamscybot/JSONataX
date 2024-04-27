@@ -10,21 +10,6 @@ export type invalid<ErrorMessage> = (
   ..._: (typeof __invalidSymbol)[]
 ) => typeof __invalidSymbol
 
-export type FormatError<
-  Message extends string | undefined,
-  InnerSig extends string | undefined = undefined,
-  Chomped extends string | undefined = undefined,
-  Formatted extends string = `${Message} Found at: <${Chomped}❌`,
-> = [
-  Message extends undefined
-    ? never
-    : invalid<
-        InnerSig extends `${Chomped}${infer Rest}`
-          ? `${Formatted}${Rest}> `
-          : `${Formatted} `
-      >,
-]
-
 export type SignatureNotWrappedError =
   `Signature must be enclosed by wrapping ${PrintToken<Enum.SubTypeOpen>} and ${PrintToken<Enum.SubTypeClose>} characters`
 

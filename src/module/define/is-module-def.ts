@@ -1,8 +1,8 @@
 import { customErrorFactory } from 'ts-custom-error'
-import { prefixedString } from './str-utils.js'
+import { prefixedString } from '../../lib/str-utils.js'
 import { type JsonataModuleFnDef, type JsonataModuleDef } from './types.js'
 
-const MODULE_ID_REGEX = /^[a-zA-Z0-9_]+$/
+const MODULE_ID_REGEX = /^[a-zA-Z0-9_:]+$/
 const FN_NAME_REGEX = /^[a-zA-Z0-9_]+$/
 
 export const InvalidJsonataModuleDefinition = customErrorFactory(
@@ -20,11 +20,13 @@ export const InvalidJsonataModuleDefinition = customErrorFactory(
 )
 
 /**
- * Checks if the input object is a function descriptor object from a module definition
- * object and throws if it is not.
+ * Checks if the input object is a function descriptor object from a module
+ * definition object and throws if it is not.
  *
  * @param def - A value to assert
+ *
  * @returns The passed in value
+ *
  * @throws {@link InvalidJsonataModuleDefinition}
  */
 export function validateJsonataModuleDefFn(
@@ -42,7 +44,7 @@ export function validateJsonataModuleDefFn(
 
   if (typeof def.name !== 'string' || !FN_NAME_REGEX.test(def.name))
     err(
-      "`name` must be a non-empty string consisting of alpha-numeric characters or '_'.",
+      "`name` must be a non-empty string consisting of alpha-numeric characters or '_', ':'.",
     )
 
   if (typeof def.implementation !== 'function')
@@ -55,9 +57,11 @@ export function validateJsonataModuleDefFn(
 }
 
 /**
- * Checks if the input object is a function descriptor object from a module definition.
+ * Checks if the input object is a function descriptor object from a module
+ * definition.
  *
  * @param def - A value to assert
+ *
  * @returns `true` if valid, otherwise `false`
  */
 export function isJsonataModuleDefFn(def: any): def is JsonataModuleFnDef {
@@ -70,16 +74,18 @@ export function isJsonataModuleDefFn(def: any): def is JsonataModuleFnDef {
 }
 
 /**
- * Checks if the input object is a module definition object
- * and throws if it is not.
+ * Checks if the input object is a module definition object and throws if it is
+ * not.
  *
  * @param def - A value to assert
+ *
  * @returns The passed in value
+ *
  * @throws {@link InvalidJsonataModuleDefinition}
  */
-export function validateJsonataModuleDef(
-  def: any,
-): asserts def is JsonataModuleDef {
+export function validateJsonataModuleDef<T extends JsonataModuleDef>(
+  def: T,
+): asserts def is T {
   const err = (message: string) => {
     throw InvalidJsonataModuleDefinition(def, message)
   }
@@ -98,15 +104,14 @@ export function validateJsonataModuleDef(
   )
     err('`description` must be a string or undefined.')
 
-  if (!Array.isArray(def.fns)) err('`fns` must be an array.')
-
-  return def
+  if (!Array.isArray(def.exports)) err('`fns` must be an array.')
 }
 
 /**
  * Checks if the input object is a module definition object.
  *
  * @param def - A value to assert
+ *
  * @returns `true` if valid, otherwise `false`
  */
 export const isJsonataModuleDef = (def: any): def is JsonataModuleDef => {

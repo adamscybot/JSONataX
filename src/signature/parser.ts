@@ -1,9 +1,9 @@
+import type { Focus } from 'jsonata'
 import type * as Errors from './errors.js'
 import type * as Tokens from './tokens.js'
 import type {
   AppendUnionToLastType,
-  NonArrayNonNullObject,
-  OptionalTuple,
+  MakeNonFnsOptional,
   SpreadLastType,
 } from './utils.js'
 
@@ -12,13 +12,16 @@ import type {
  * TS types for those tokens.
  */
 type TypeTokenMappings = {
+  // Fallbacks for array or function signatures without subtypes defined
   [Tokens.Enum.ArrayType]: Array<any>
+  [Tokens.Enum.FunctionType]: (...args: any) => any
+
+  // Plain single types
   [Tokens.Enum.BooleanType]: boolean
   [Tokens.Enum.NumberType]: number
   [Tokens.Enum.StringType]: string
   [Tokens.Enum.NullType]: null
-  [Tokens.Enum.ObjectType]: NonArrayNonNullObject
-  [Tokens.Enum.FunctionType]: (...args: any) => any
+  [Tokens.Enum.ObjectType]: Record<keyof any, unknown> // JSONata Object token does not represent arrays or null
   [Tokens.Enum.JsonType]: boolean | number | string | null | object
   [Tokens.Enum.AnyType]:
     | boolean
@@ -261,7 +264,7 @@ type AppendCurrentAccumulator<
  * Used for when `:` is encountered and subsequent types are therefore defining the
  * return types.
  */
-type SetCurrentAccumulator<
+type SwitchCurrentAccumulatorPointer<
   State extends ParserStateType,
   To extends AccumulatorIoType,
 > = {
@@ -355,7 +358,7 @@ type StageChildState<
   // we avoid this as an error has occurred before that terminator.
   IsStateInvalid<ChildState> extends true
     ? HoistedParentState
-    : AppendChomped<HoistedParentState, TerminatorChar>
+    : AppendChomped<HoistedParentState, Tokens.CharOf<TerminatorChar>>
   child: ChildState
 }
 
@@ -393,7 +396,7 @@ type ProcessSubTypedFunction<
   >,
 > = AppendCurrentAccumulator<
   StagedState['parent'],
-  StateToFn<StagedState['child']>
+  StateToLambdaFn<StagedState['child']>
 >
 
 /**
@@ -425,7 +428,11 @@ type ProcessUnion<
     ProcessSig<
       UnionString,
       NewParserState<
-        keyof Tokens.ModifierTokenChars | keyof Tokens.DelimiterTokenChars
+        | keyof Tokens.ModifierTokenChars
+        | keyof Tokens.DelimiterTokenChars
+        // Current signature parser does not support compound types in unions
+        | Tokens.Enum.JsonType
+        | Tokens.Enum.AnyType
       >
     >,
     Tokens.Enum.UnionClose
@@ -446,7 +453,7 @@ type ProcessUnion<
 type ProcessReturnDelimiter<State extends ParserStateType> =
   State['currentAccumulator'] extends AccumulatorIoType.Return
     ? InvalidateState<State, Errors.InvalidReturnDelimiterError>
-    : SetCurrentAccumulator<State, AccumulatorIoType.Return>
+    : SwitchCurrentAccumulatorPointer<State, AccumulatorIoType.Return>
 
 /**
  * Given a parser state and a type token that represents a single plain type, return a
@@ -463,13 +470,112 @@ type ProcessSingleType<
  * the params are derived from the param accumulator types and the return type
  * is derived from the return accumulator.
  */
-type StateToFn<State extends ParserStateType> =
-  GetReturnAccumulator<State> extends [any, ...any[]]
-    ? (
-        ...args: OptionalTuple<GetParamAccumulator<State>>
-      ) => GetReturnAccumulator<State>[0]
-    : // If no return type specified, assume `any`
-      (...args: OptionalTuple<GetParamAccumulator<State>>) => any
+type StateToRegisteredFn<State extends ParserStateType> =
+  IsStateInvalid<State> extends true
+    ? (this: Focus, ...args: unknown[]) => unknown
+    : GetReturnAccumulator<State> extends [any, ...any[]]
+      ? (
+          this: Focus,
+          ...args: MakeNonFnsOptional<GetParamAccumulator<State>>
+        ) =>
+          | GetReturnAccumulator<State>[0]
+          | Promise<GetReturnAccumulator<State>[0]>
+      : // If no return type specified, assume `any`
+        (
+          this: Focus,
+          ...args: MakeNonFnsOptional<GetParamAccumulator<State>>
+        ) => any
+
+/** @see {@link unsafe_lambdaRet} */
+declare const __targetType: unique symbol
+
+/** @see {@link unsafe_lambdaRet} */
+export type LambdaRet<DeclaredType> = Promise<unknown> & {
+  [__targetType]: DeclaredType
+}
+
+/**
+ * A utility function for TS module authors. Given the return value of a lambda
+ * call made inside a module function body, returns that same value
+ * but type cast to the specified return type in the function subtype
+ * signature.
+ *
+ * **CAUTION:** Does not actually check the type matches the signature. In most cases
+ * you should type check the return value yourself as necessary. This is to be
+ * used for cases where you don't want to incur the cost and accept lower
+ * type-safety.
+ *
+ * @remarks
+ * The signature allows functions to be defined as parameters
+ * (lambdas) and to specify the return type token for those lambdas.
+ * This is for the future and is not currently actually checked by the
+ * signature validator.
+ *
+ * Therefore, return types declared for lambdas actually surface as
+ * `unknown`s meaning the dev needs to cast them or type narrow them
+ * to ascertain their true type.
+ *
+ * However, we wrap this `unknown` type with the "declared" return type
+ * such that the dev can opt out of type safety and assume it is the "declared" type
+ * by passing it into this helper method in the runtime.
+ *
+ * @example
+ * This code will have a compile error since the call to `lambda` will
+ * return an `unknown` which does not match the top-level declared return type of `string`.
+ *
+ * ```
+ * import { defineModule } from 'modular-jsonata'
+ 
+ * const module = defineModule('example').export(
+ *   'testFn',
+ *   '<f<n:s>:s>',
+ *   function (lambda) { // Type 'unknown' is not assignable to type 'string'. ts(2345)
+ *     return lambda(5)
+ *   },
+ * )
+ * ```
+ *
+ * By using `unsafe_lambdaRet`, the error goes away since the lambda return value is
+ * (unsafely) assumed to be what it is declared as in the signature (`string`). Since this
+ * also matches the top-level declared return type.
+ *
+ * ```
+ * import { defineModule, unsafe_lambdaRet } from 'modular-jsonata'
+ * const module = defineModule('example').export(
+ *   'testFn',
+ *   '<f<n:s>:s>',
+ *   function (lambda) {
+ *     return unsafe_lambdaRet(lambda(5))
+ *   },
+ * )
+ * ```
+ *
+ * @param value - The return value from a lambda, where that lambda is being called
+ * from a module function body.
+ * @returns The same `value`, but force-cast to the type it has been declared as in the signature.
+ */
+export function unsafe_lambdaRet<DeclaredType>(
+  value: LambdaRet<DeclaredType>,
+): DeclaredType {
+  return value as unknown as DeclaredType
+}
+
+/**
+ * Given some parser state, return a function that represents that respects
+ * the semantics of JSONata lambdas, where the params are derived from the
+ * param accumulator types and the return type is derived from the return accumulator.
+ */
+type StateToLambdaFn<State extends ParserStateType> =
+  IsStateInvalid<State> extends true
+    ? (...args: unknown[]) => Promise<unknown>
+    : GetReturnAccumulator<State> extends [any, ...any[]]
+      ? (
+          ...args: MakeNonFnsOptional<GetParamAccumulator<State>>
+        ) => LambdaRet<Promise<GetReturnAccumulator<State>[0]>>
+      : // If no return type specified, assume `unknown`
+        (
+          ...args: MakeNonFnsOptional<GetParamAccumulator<State>>
+        ) => Promise<unknown>
 
 /**
  * The recursive core of the parser. Given a character, the rest of the string
@@ -517,9 +623,10 @@ type ProcessSigChar<
           : // Case where a return delimiter is encountered and we should populate the second inner tuple from
             // this point onwards
             Token extends Tokens.Enum.ReturnSeparator
-            ? ProcessSig<Rest, ProcessReturnDelimiter<State>> // Case where a token representing a single type is encountered
+            ? ProcessSig<Rest, ProcessReturnDelimiter<State>>
             : Token extends keyof TypeTokenMappings
-              ? ProcessSig<Rest, ProcessSingleType<State, Token>>
+              ? // Case where a token representing a single type is encountered
+                ProcessSig<Rest, ProcessSingleType<State, Token>>
               : // Case where a sub type open token is encountered, but not following a non parameterisable type.
                 // Valid uses of this token are captured in an earlier case.
                 Token extends Tokens.Enum.SubTypeOpen
@@ -572,99 +679,128 @@ type UnwrapSignature<S extends string> =
     : undefined
 
 /**
- * Given a signature string, return the typed function that represents it. May also return a parsing error if the
- * signature string is invalid.
+ * Given a signature string, return the typed function that represents it. In an error scenario (signature invalid)
+ * it will return a function type that has `unknown` arguments and return type.
  *
  *
  * @example Valid signature string.
  * ```
- * // ExampleFn equal to `(args_0: string | undefined, args_1: string | ((...args: any) => any) | undefined) => boolean`
- * type ExampleFn = ParseSignature<'<s-(sf):b>'>
+ * // ExampleFn equal to `(this: Focus, args_0: string | undefined, args_1: string | ((...args: any) => any) | undefined) => boolean | Promise<boolean>`
+ * type ExampleFn = ImplFromSignature<'<s-(sf):b>'>
  * ```
  *
- * @example Invalid signature string.
+ * @example Invalid signature string (subtype used in union).
  * ```
- * // ExampleErr equal to `[Errors.invalid<"Error parsing signature. Token SubTypeOpen '<' can not be used here. Found at: <s-(sf<❌s>):b> ">]`
- * type ExampleErr = ParseSignature<'<s-(sf<s>):b>'>
+ * // ExampleErr equal to `(this: Focus, ...args: unknown[]) => unknown`
+ * type ExampleErr = ImplFromSignature<'<s-(sf<s>):b>'>
  * ```
  *
  * @typeParam S - The signature string
  * @typeParam UnwrappedSignature - Internal type representing unwrapped ("inner") part of the signature string. Leave defaulted.
  */
-export type ParseSignature<
+export type ImplFromSignature<
+  S extends string,
+  UnwrappedSignature extends string | undefined = UnwrapSignature<S>,
+> = UnwrappedSignature extends string
+  ? StateToRegisteredFn<ProcessSig<UnwrappedSignature>>
+  : (this: Focus, ...args: unknown[]) => unknown
+
+/**
+ * Given a signature string, return the same string only if it is valid. In the invalid scenario, it returns an error type
+ * detailing the problem.
+ *
+ *
+ * @example Valid signature string.
+ * ```
+ * // ExampleSig equal to `<s-(sf):b>`
+ * type ExampleSig = ValidSignature<'<s-(sf):b>'>
+ * ```
+ *
+ * @example Invalid signature string (subtype used in union).
+ * ```
+ * // ExampleSig equal to `Errors.invalid<"⛔ Error parsing signature. Token SubTypeOpen '<' can not be used here. Found at: <s-(sf<💥s>):b> ">`
+ * type ExampleSig = ValidSignature<'<s-(sf<s>):b>'>
+ * ```
+ *
+ * @typeParam S - The signature string
+ * @typeParam UnwrappedSignature - Internal type representing unwrapped ("inner") part of the signature string. Leave defaulted.
+ */
+export type ValidSignature<
   S extends string,
   UnwrappedSignature extends string | undefined = UnwrapSignature<S>,
 > = UnwrappedSignature extends string
   ? IsStateInvalid<ProcessSig<UnwrappedSignature>> extends true
-    ? Errors.FormatError<
-        ProcessSig<UnwrappedSignature>['error'],
-        UnwrappedSignature,
-        ProcessSig<UnwrappedSignature>['chomped']
-      >
-    : StateToFn<ProcessSig<UnwrappedSignature>>
-  : [Errors.invalid<Errors.SignatureNotWrappedError>]
+    ? ProcessSig<UnwrappedSignature>['error'] extends undefined
+      ? never
+      : Errors.invalid<
+          UnwrappedSignature extends `${ProcessSig<UnwrappedSignature>['chomped']}${infer Rest}`
+            ? `⛔ ${`${ProcessSig<UnwrappedSignature>['error']} Found at: <${ProcessSig<UnwrappedSignature>['chomped']}💥`}${Rest}> `
+            : `⛔ ${`${ProcessSig<UnwrappedSignature>['error']} Found at: <${ProcessSig<UnwrappedSignature>['chomped']}💥`} `
+        >
+    : S
+  : Errors.invalid<Errors.SignatureNotWrappedError>
 
 // Temp examples showing all types working
-type JsonataFn_sum = ParseSignature<'<a<n>:n>'>
-type JsonataFn_count = ParseSignature<'<a:n>'>
-type JsonataFn_max = ParseSignature<'<a<n>:n>'>
-type JsonataFn_min = ParseSignature<'<a<n>:n>'>
-type JsonataFn_average = ParseSignature<'<a<n>:n>'>
-type JsonataFn_string = ParseSignature<'<x-b?:s>'>
-type JsonataFn_substring = ParseSignature<'<s-nn?:s>'>
-type JsonataFn_substringBefore = ParseSignature<'<s-s:s>'>
-type JsonataFn_substringAfter = ParseSignature<'<s-s:s>'>
-type JsonataFn_lowercase = ParseSignature<'<s-:s>'>
-type JsonataFn_uppercase = ParseSignature<'<s-:s>'>
-type JsonataFn_length = ParseSignature<'<s-:n>'>
-type JsonataFn_trim = ParseSignature<'<s-:s>'>
-type JsonataFn_pad = ParseSignature<'<s-ns?:s>'>
-type JsonataFn_match = ParseSignature<'<s-f<s:o>n?:a<o>>'>
-type JsonataFn_contains = ParseSignature<'<s-(sf<s>):b>'>
-type JsonataFn_replace = ParseSignature<'<s-(sf)(sf)n?:s>'>
-type JsonataFn_split = ParseSignature<'<s-(sfn)?:a<s>>'>
-type JsonataFn_join = ParseSignature<'<a<s>s?:s>'>
-type JsonataFn_formatNumber = ParseSignature<'<n-so?:s>'>
-type JsonataFn_formatBase = ParseSignature<'<n-n?:s>'>
-type JsonataFn_formatInteger = ParseSignature<'<n-s:s>'>
-type JsonataFn_parseInteger = ParseSignature<'<s-s:n>'>
-type JsonataFn_number = ParseSignature<'<(nsb)-:n>'>
-type JsonataFn_floor = ParseSignature<'<n-:n>'>
-type JsonataFn_ceil = ParseSignature<'<n-:n>'>
-type JsonataFn_round = ParseSignature<'<n-n?:n>'>
-type JsonataFn_abs = ParseSignature<'<n-:n>'>
-type JsonataFn_sqrt = ParseSignature<'<n-:n>'>
-type JsonataFn_power = ParseSignature<'<n-n:n>'>
-type JsonataFn_random = ParseSignature<'<:n>'>
-type JsonataFn_boolean = ParseSignature<'<x-:b>'>
-type JsonataFn_not = ParseSignature<'<x-:b>'>
-type JsonataFn_map = ParseSignature<'<af>'>
-type JsonataFn_zip = ParseSignature<'<a+>'>
-type JsonataFn_filter = ParseSignature<'<af>'>
-type JsonataFn_single = ParseSignature<'<af?>'>
-type JsonataFn_reduce = ParseSignature<'<afj?:j>'>
-type JsonataFn_sift = ParseSignature<'<o-f?:o>'>
-type JsonataFn_keys = ParseSignature<'<x-:a<s>>'>
-type JsonataFn_lookup = ParseSignature<'<x-s:x>'>
-type JsonataFn_append = ParseSignature<'<xx:a>'>
-type JsonataFn_exists = ParseSignature<'<x:b>'>
-type JsonataFn_spread = ParseSignature<'<x-:a<o>>'>
-type JsonataFn_merge = ParseSignature<'<a<o>:o>'>
-type JsonataFn_reverse = ParseSignature<'<a:a>'>
-type JsonataFn_each = ParseSignature<'<o-f:a>'>
-type JsonataFn_error = ParseSignature<'<s?:x>'>
-type JsonataFn_assert = ParseSignature<'<bs?:x>'>
-type JsonataFn_type = ParseSignature<'<x:s>'>
-type JsonataFn_sort = ParseSignature<'<af?:a>'>
-type JsonataFn_shuffle = ParseSignature<'<a:a>'>
-type JsonataFn_distinct = ParseSignature<'<x:x>'>
-type JsonataFn_base64encode = ParseSignature<'<s-:s>'>
-type JsonataFn_base64decode = ParseSignature<'<s-:s>'>
-type JsonataFn_encodeUrlComponent = ParseSignature<'<s-:s>'>
-type JsonataFn_encodeUrl = ParseSignature<'<s-:s>'>
-type JsonataFn_decodeUrlComponent = ParseSignature<'<s-:s>'>
-type JsonataFn_decodeUrl = ParseSignature<'<s-:s>'>
-type JsonataFn_eval = ParseSignature<'<sx?:x>'>
-type JsonataFn_toMillis = ParseSignature<'<s-s?:n>'>
-type JsonataFn_fromMillis = ParseSignature<'<n-s?s?:s>'>
-type JsonataFn_clone = ParseSignature<'<(oa)-:o>'>
+// type JsonataFn_sum = ImplFromSignature<'<a<n>:n>'>
+// type JsonataFn_count = ImplFromSignature<'<a:n>'>
+// type JsonataFn_max = ImplFromSignature<'<a<n>:n>'>
+// type JsonataFn_min = ImplFromSignature<'<a<n>:n>'>
+// type JsonataFn_average = ImplFromSignature<'<a<n>:n>'>
+// type JsonataFn_string = ImplFromSignature<'<x-b?:s>'>
+// type JsonataFn_substring = ImplFromSignature<'<s-nn?:s>'>
+// type JsonataFn_substringBefore = ImplFromSignature<'<s-s:s>'>
+// type JsonataFn_substringAfter = ImplFromSignature<'<s-s:s>'>
+// type JsonataFn_lowercase = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_uppercase = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_length = ImplFromSignature<'<s-:n>'>
+// type JsonataFn_trim = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_pad = ImplFromSignature<'<s-ns?:s>'>
+// type JsonataFn_match = ImplFromSignature<'<s-f<s:o>n?:a<o>>'>
+// type JsonataFn_contains = ImplFromSignature<'<s-(sf<s>):b>'>
+// type JsonataFn_replace = ImplFromSignature<'<s-(sf)(sf)n?:s>'>
+// type JsonataFn_split = ImplFromSignature<'<s-(sfn)?:a<s>>'>
+// type JsonataFn_join = ImplFromSignature<'<a<s>s?:s>'>
+// type JsonataFn_formatNumber = ImplFromSignature<'<n-so?:s>'>
+// type JsonataFn_formatBase = ImplFromSignature<'<n-n?:s>'>
+// type JsonataFn_formatInteger = ImplFromSignature<'<n-s:s>'>
+// type JsonataFn_parseInteger = ImplFromSignature<'<s-s:n>'>
+// type JsonataFn_number = ImplFromSignature<'<(nsb)-:n>'>
+// type JsonataFn_floor = ImplFromSignature<'<n-:n>'>
+// type JsonataFn_ceil = ImplFromSignature<'<n-:n>'>
+// type JsonataFn_round = ImplFromSignature<'<n-n?:n>'>
+// type JsonataFn_abs = ImplFromSignature<'<n-:n>'>
+// type JsonataFn_sqrt = ImplFromSignature<'<n-:n>'>
+// type JsonataFn_power = ImplFromSignature<'<n-n:n>'>
+// type JsonataFn_random = ImplFromSignature<'<:n>'>
+// type JsonataFn_boolean = ImplFromSignature<'<x-:b>'>
+// type JsonataFn_not = ImplFromSignature<'<x-:b>'>
+// type JsonataFn_map = ImplFromSignature<'<af>'>
+// type JsonataFn_zip = ImplFromSignature<'<a+>'>
+// type JsonataFn_filter = ImplFromSignature<'<af>'>
+// type JsonataFn_single = ImplFromSignature<'<af?>'>
+// type JsonataFn_reduce = ImplFromSignature<'<afj?:j>'>
+// type JsonataFn_sift = ImplFromSignature<'<o-f?:o>'>
+// type JsonataFn_keys = ImplFromSignature<'<x-:a<s>>'>
+// type JsonataFn_lookup = ImplFromSignature<'<x-s:x>'>
+// type JsonataFn_append = ImplFromSignature<'<xx:a>'>
+// type JsonataFn_exists = ImplFromSignature<'<x:b>'>
+// type JsonataFn_spread = ImplFromSignature<'<x-:a<o>>'>
+// type JsonataFn_merge = ImplFromSignature<'<a<o>:o>'>
+// type JsonataFn_reverse = ImplFromSignature<'<a:a>'>
+// type JsonataFn_each = ImplFromSignature<'<o-f:a>'>
+// type JsonataFn_error = ImplFromSignature<'<s?:x>'>
+// type JsonataFn_assert = ImplFromSignature<'<bs?:x>'>
+// type JsonataFn_type = ImplFromSignature<'<x:s>'>
+// type JsonataFn_sort = ImplFromSignature<'<af?:a>'>
+// type JsonataFn_shuffle = ImplFromSignature<'<a:a>'>
+// type JsonataFn_distinct = ImplFromSignature<'<x:x>'>
+// type JsonataFn_base64encode = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_base64decode = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_encodeUrlComponent = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_encodeUrl = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_decodeUrlComponent = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_decodeUrl = ImplFromSignature<'<s-:s>'>
+// type JsonataFn_eval = ImplFromSignature<'<sx?:x>'>
+// type JsonataFn_toMillis = ImplFromSignature<'<s-s?:n>'>
+// type JsonataFn_fromMillis = ImplFromSignature<'<n-s?s?:s>'>
+// type JsonataFn_clone = ImplFromSignature<'<(oa)-:o>'>
