@@ -1,13 +1,14 @@
 import type { Enum, PrintToken } from './tokens.js'
 
-const InvalidTypeSymbol = Symbol(`Invalid type`)
+declare const __invalidSymbol: unique symbol
+
 export type invalid<ErrorMessage> = (
   // ErrorMessage doesn't need to be used here, except that using it allows
   // TypeScript to print the passed message instead of just "ErrorMessage"
   // in certain cases.
-  invalidType: ErrorMessage & typeof InvalidTypeSymbol,
-  ..._: (typeof InvalidTypeSymbol)[]
-) => typeof InvalidTypeSymbol
+  invalidType: ErrorMessage & typeof __invalidSymbol,
+  ..._: (typeof __invalidSymbol)[]
+) => typeof __invalidSymbol
 
 export type FormatError<
   Message extends string | undefined,

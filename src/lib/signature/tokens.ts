@@ -60,7 +60,7 @@ type ReverseLookup<T, V> = {
 // TokenFor type for looking up Enum based on character
 export type TokenOf<Char extends string> =
   ReverseLookup<TokenChars, Char> extends never
-    ? never
+    ? false
     : ReverseLookup<TokenChars, Char>
 
 export type PrintToken<Token extends Enum> = `${Token} '${CharOf<Token>}'`
