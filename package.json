@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@homer0/prettier-plugin-jsdoc": "^9.0.0",
+    "@tangible/git-subrepo": "^1.0.1",
     "@typescript-eslint/eslint-plugin": "^7.3.1",
     "@typescript-eslint/parser": "^7.3.1",
     "eslint": "^8.57.0",

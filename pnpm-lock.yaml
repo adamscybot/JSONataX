@@ -13,6 +13,9 @@ devDependencies:
   '@homer0/prettier-plugin-jsdoc':
     specifier: ^9.0.0
     version: 9.0.0
+  '@tangible/git-subrepo':
+    specifier: ^1.0.1
+    version: 1.0.1
   '@typescript-eslint/eslint-plugin':
     specifier: ^7.3.1
     version: 7.3.1(@typescript-eslint/parser@7.3.1)(eslint@8.57.0)(typescript@5.4.3)
@@ -403,6 +406,11 @@ packages:
   /@sindresorhus/merge-streams@2.3.0:
     resolution: {integrity: sha512-LtoMMhxAlorcGhmFYI+LhPgbPZCkgP6ra1YL604EeF6U98pLlQ3iWIGMdWSC+vWmPBWBNgmDBAhnAobLROJmwg==}
     engines: {node: '>=18'}
+    dev: true
+
+  /@tangible/git-subrepo@1.0.1:
+    resolution: {integrity: sha512-SiFeokN0wKYMbbst+sOZxwMbA+oZYZzZcpnppoq2ZqmVoRI6oJRLC3F02Zam51d5vUTIzyZfIvUi2DOlnGYYDA==}
+    hasBin: true
     dev: true
 
   /@types/debug@4.1.12:
