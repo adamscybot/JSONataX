@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/jsonata-js/jsonata.git
+	branch = master
+	commit = 43c0f0cf1a7bc2bf41babc271426269d06841da3
+	parent = 74df6301e952b57cde58262203f519321d73b046
+	method = merge
+	cmdver = 0.4.6
