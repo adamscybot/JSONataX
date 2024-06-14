@@ -12,7 +12,8 @@
   "scripts": {
     "lint": "eslint './src/**/*.ts'",
     "prebuild": "",
-    "build": "tsc --project tsconfig.json"
+    "build": "tsc --project tsconfig.json",
+    "jsonata:pull": "echo \"Updating @jsonatax/jsonata-extended from jsonata-js/jsonata repo\" && pnpm git-subrepo pull ./packages/jsonata-extended"
   },
   "keywords": [
     "jsonata",

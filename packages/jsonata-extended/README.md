@@ -1,70 +1,50 @@
-# JSONata
+# @jsonatax/jsonata-extended
 
-JSON query and transformation language
+A lightly modified [jsonata](https://github.com/jsonata-js/jsonata) fork package to support JSONataX functionality.
 
-[![NPM statistics](https://nodei.co/npm/jsonata.png?downloads=true&downloadRank=true)](https://nodei.co/npm/jsonata/)
+The version tracks the version in the underlying repository. For example, `@jsonatax/jsonata-extended@2.0.5` is the extended version of `jsonata@2.0.5`.
 
-Reference implementation of the [JSONata query and transformation language](http://jsonata.org/).
+Whilst primarily serving as a bridge to JSONataX, `@jsonatax/jsonata-extended` can be used as a swap in replacement to `jsonata`, independent of the wider JSONataX library -- _with some rare exceptions_. See [Modifications](#modifications) for the advantages of doing so.
 
-* [JSONata in 5 minutes](https://www.youtube.com/embed/ZBaK40rtIBM)
-* [JSONata language documentation](http://docs.jsonata.org/)
-* [Try it out!](http://try.jsonata.org/)
+## Modifications
 
-## Installation
+The principle of this module is to make the least amount of changes possible to the JSONata core to support JSONataX, to make long-term maintenance of this fork easier.
 
-- `npm install jsonata`
+-   Conversion to an ESM module, with additional exports of core primitives necessary for JSONataX function.
+-   Allow the AST to be provided to `evaluate` as well as the query string. This supports JSONAataX hooks that enable modification of the AST.
+-   Changes to the parser AST such that nodes can be traced back to their originating query syntax. This supports enhanced JSONataX debug-ability features.
+-   Protect pre-existing `__evaluate_entry` and `__evaluate_exit` hooks from being modified inside a query. Otherwise, this potentially allows malicious queries to disable functionality such as timeboxing.
+-   Add a new `__frame_create` hook that is called when a new frame (aka environment) is created. This supports JSONataX core plugins that provide enhanced debug-ability and security to queries.
+-   Changes to the core evaluator logic that allow expression execution to be more easily traced.
 
-## Quick start
+## Development
 
-In Node.js:
+The development process is largely the same as that of [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata), with some exceptions.
 
-```javascript
-const jsonata = require('jsonata');
+### Sync with latest JSONata
 
-const data = {
-    example: [
-        {value: 4},
-        {value: 7},
-        {value: 13}
-    ]
-};
+To bring the package up to the latest version of JSOnata, run:
 
-(async () => {
-    const expression = jsonata('$sum(example.value)');
-    const result = await expression.evaluate(data);  // returns 24
-})()
+```bash
+pnpm run jsonata:pull
 ```
 
-In a browser:
+## FAQ
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <title>JSONata test</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsonata/jsonata.min.js"></script>
-    <script>
-      async function greeting() {
-        var json = JSON.parse(document.getElementById('json').value);
-        var result = await jsonata('"Hello, " & name').evaluate(json);
-        document.getElementById('greeting').innerHTML = result;
-      }
-    </script>
-  </head>
-  <body>
-    <textarea id="json">{ "name": "Wilbur" }</textarea>
-    <button onclick="greeting()">Click me</button>
-    <p id="greeting"></p>
-  </body>
-</html>
-```
+### Why can't these changes be part of JSONata core?
 
-## More information
-- JSONata [documentation](http://docs.jsonata.org/)
-- [JavaScript API](http://docs.jsonata.org/embedding-extending)
-- [Intro talk](https://www.youtube.com/watch?v=TDWf6R8aqDo) at London Node User Group
+I have raised some of these changes in the JSOnata repository and the ideal outcome remains that they are merged and `@jsonatax/jsonata-extended` could be subsequently deprecated. However, I wish to move quicker than the current JSOnata project (which is an established long-lived project) allows, so it makes sense to maintain this for now. This will be kept under review.
 
-## Contributing
+Regardless, changes here are kept to a minimum to make merging upstream a realistic prospect.
 
-See the [CONTRIBUTING.md](CONTRIBUTING.md) for details of how to contribute to this repo.
+### How can I verify the changes against [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata)?
+
+We use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to track the upstream changes. This involves bringing in all the commits on [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata) into this project.
+
+### Can't I just use the canonical `jsonata` package with JSONataX instead?
+
+Not yet, but we may add a way to do this with limited JSONataX functionality in future.
+
+### What versions are available?
+
+There are forks for every release `>= 2.0.5`. Less than this will not be supported due to critical security patches in this release that are assumed to exist.
