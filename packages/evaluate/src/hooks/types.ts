@@ -1,4 +1,4 @@
-import { type Focus } from 'jsonata'
+import { type Focus } from '@jsonatax/jsonata-extended'
 import { type InvokationContext } from '../lib/invokation-context.js'
 
 enum HookTypes {

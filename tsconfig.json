@@ -6,10 +6,9 @@
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
     "target": "ES2022",
-    "outDir": "dist",
+    "outDir": "${configDir}/dist",
     "allowSyntheticDefaultImports": true,
     "downlevelIteration": true,
     "noUnusedLocals": false
-  },
-  "include": ["./src/**/*"]
+  }
 }

@@ -1,4 +1,7 @@
-import jsonata, { type Focus, type Expression } from 'jsonata'
+import jsonata, {
+  type Focus,
+  type Expression,
+} from '@jsonatax/jsonata-extended'
 import { type ModularJsonataExpressionOpts } from '../index.js'
 import {
   type BindModuleOpts,

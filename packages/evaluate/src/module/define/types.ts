@@ -1,4 +1,4 @@
-import { type Expression } from 'jsonata'
+import { type Expression } from '@jsonatax/jsonata-extended'
 import type * as defineTypes from './define.js'
 import {
   type DeepReadonly,

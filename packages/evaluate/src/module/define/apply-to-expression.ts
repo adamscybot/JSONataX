@@ -1,4 +1,4 @@
-import type { Expression } from 'jsonata'
+import type { Expression } from '@jsonatax/jsonata-extended'
 import type { JsonataModuleDef } from './types.js'
 
 export const applyToExpression = (

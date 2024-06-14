@@ -1,0 +1,37 @@
+{
+  "name": "@jsonatax/evaluator",
+  "description": "A lightweight wrapper for JSONata that introduces the concept of modules in order to easily & ergonomically extend it. Import other peoples JSONata modules and dynamically import them in your expressions. Define your own modules! for other people to use!.",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "lint": "eslint './src/**/*.ts'",
+    "prebuild": "",
+    "build": "tsc --project tsconfig.json",
+    "jsonata:pull": "echo \"Updating @jsonatax/jsonata-extended from jsonata-js/jsonata repo\" && pnpm git-subrepo pull ./packages/jsonata-extended"
+  },
+  "keywords": [
+    "jsonata",
+    "modular"
+  ],
+  "author": "adamscybot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamscybot/modular-jsonata.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adamscybot/modular-jsonata/issues"
+  },
+  "peerDependencies": {
+    "@jsonatax/jsonata-extended": ">=2.0.5"
+  },
+  "dependencies": {
+    "ts-custom-error": "^3.3.1"
+  }
+}

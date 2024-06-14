@@ -1,4 +1,7 @@
-import { type default as jsonata, type JsonataOptions } from 'jsonata'
+import {
+  type default as jsonata,
+  type JsonataOptions,
+} from '@jsonatax/jsonata-extended'
 
 import { type JsonataModuleImpl, createModule } from '../module/module.js'
 import { type JsonataModuleDef } from '../module/define/types.js'

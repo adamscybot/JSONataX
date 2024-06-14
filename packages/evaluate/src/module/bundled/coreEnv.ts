@@ -1,4 +1,4 @@
-import { type Environment } from 'jsonata'
+import { type Environment } from '@jsonatax/jsonata-extended'
 import { InvokationContext } from '../../lib/invokation-context.js'
 import { defineModule } from '../define/define.js'
 
@@ -198,24 +198,28 @@ export const coreEnv = (opts: SecureEnvOpts = {}) => {
     initEnvSandbox(env, isSandboxRoot)
   }
 
-  return defineModule('jsonatax:core:env')
-    .tapHook('eval:entry', function (expr, input, env) {
-      validateCaller(this)
-
-      console.log('ENTRY', env)
-      if (!isInternalisedEnv(env)) {
-        internaliseEnv(env)
-
+  return (
+    defineModule('jsonatax:core:env')
+      // @ts-ignore
+      .tapHook('eval:entry', function (expr, input, env) {
         // @ts-ignore
-        env.ok = 'ok'
+        validateCaller(this)
 
-        // @ts-ignore
-        // console.log('test', env.isSandboxRoot)
-      }
-    })
-    .tapHook('eval:exit', function () {
-      validateCaller(this)
-    })
+        console.log('ENTRY', env)
+        if (!isInternalisedEnv(env)) {
+          internaliseEnv(env)
 
-    .build()
+          // @ts-ignore
+          env.ok = 'ok'
+
+          // @ts-ignore
+          // console.log('test', env.isSandboxRoot)
+        }
+      })
+      .tapHook('eval:exit', function () {
+        validateCaller(this)
+      })
+
+      .build()
+  )
 }

@@ -1,7 +1,7 @@
-import { type Focus, type Expression } from 'jsonata'
+import { type Focus, type Expression } from '@jsonatax/jsonata-extended'
 // Unfortunately since this is not exposed where it is needed,
 // we have to import it from source via a github dep.
-import signatureValidator from 'jsonata-src/src/signature.js'
+import signatureValidator from '@jsonatax/jsonata-extended/src/signature.js'
 import {
   type JsonataModuleDef,
   type JsonataModuleFnDef,

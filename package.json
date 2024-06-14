@@ -28,10 +28,6 @@
   "bugs": {
     "url": "https://github.com/adamscybot/modular-jsonata/issues"
   },
-  "peerDependencies": {
-    "jsonata": ">=2.0.5",
-    "ses": "^1.4.1"
-  },
   "devDependencies": {
     "@homer0/prettier-plugin-jsdoc": "^9.0.0",
     "@tangible/git-subrepo": "^1.0.1",
@@ -44,8 +40,7 @@
     "prettier": "^3.2.5",
     "prettier-plugin-jsdoc": "^1.3.0",
     "semantic-release": "^23.0.5",
-    "ses": "^1.4.1",
-    "typescript": "^5.4.3"
+    "typescript": "5.5.0-beta"
   },
   "release": {
     "branches": [
@@ -55,7 +50,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "ts-custom-error": "^3.3.1"
+  "pnpm": {
+    "overrides": {
+      "cjstoesm>typescript": "^4.9.5"
+    }
   }
 }

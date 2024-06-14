@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { modularJsonata } from './builder/builder.js'
 import { coreEnv } from './module/bundled/coreEnv.js'
-import jsonata from 'jsonata'
+import jsonata from '@jsonatax/jsonata-extended'
 import { defineModule } from './module/define/define.js'
 // import { deepFreeze } from './lib/immutability.js'
 

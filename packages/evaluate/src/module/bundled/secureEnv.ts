@@ -122,36 +122,40 @@ export const secureEnv = (opts: SecureEnvOpts = {}) => {
     }
   }
 
-  return defineModule('secureEnv')
-    .tapHook('eval:entry', function (expr, input, env) {
-      validateCaller(this)
+  return (
+    defineModule('secureEnv')
+      // @ts-ignore
+      .tapHook('eval:entry', function (expr, input, env) {
+        // @ts-ignore
+        validateCaller(this)
 
-      if (disableCoreEnvApiIntegrity === true) return
+        if (disableCoreEnvApiIntegrity === true) return
 
-      const oldEnvBind = env.bind
-      const oldEnvLookup = env.lookup
+        const oldEnvBind = env.bind
+        const oldEnvLookup = env.lookup
 
-      ensureProtected(env, BIND_FN_NAME, (key: string, val: any) => {
-        if (
-          disableEvalHookIntegrity === false &&
-          (
-            [
-              EnvBuiltInsInternal.EvaluateEntry,
-              EnvBuiltInsInternal.EvaluateExit,
-            ] as string[]
-          ).includes(key)
-        ) {
-          throw new Error('sadasd')
-        }
+        ensureProtected(env, BIND_FN_NAME, (key: string, val: any) => {
+          if (
+            disableEvalHookIntegrity === false &&
+            (
+              [
+                EnvBuiltInsInternal.EvaluateEntry,
+                EnvBuiltInsInternal.EvaluateExit,
+              ] as string[]
+            ).includes(key)
+          ) {
+            throw new Error('sadasd')
+          }
 
-        oldEnvBind(key, val)
+          oldEnvBind(key, val)
+        })
+
+        ensureProtected(env, LOOKUP_FN_NAME, oldEnvLookup)
+      })
+      .tapHook('eval:exit', function () {
+        validateCaller(this)
       })
 
-      ensureProtected(env, LOOKUP_FN_NAME, oldEnvLookup)
-    })
-    .tapHook('eval:exit', function () {
-      validateCaller(this)
-    })
-
-    .build()
+      .build()
+  )
 }
