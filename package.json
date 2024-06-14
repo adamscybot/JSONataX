@@ -13,7 +13,9 @@
     "lint": "eslint './src/**/*.ts'",
     "prebuild": "",
     "build": "tsc --project tsconfig.json",
-    "jsonata:pull": "echo \"Updating @jsonatax/jsonata-extended from jsonata-js/jsonata repo\" && pnpm git-subrepo pull ./packages/jsonata-extended"
+    "jsonata:subrepo:pull": "echo \"Updating @jsonatax/jsonata-extended from jsonata-js/jsonata repo\" && pnpm git-subrepo pull ./packages/jsonata-extended",
+    "jsonata:subrepo:diff": "pnpm git-subrepo fetch packages/jsonata-extended && git subrepo branch -f packages/jsonata-extended && git diff FETCH_HEAD..packages/jsonata-extended",
+    "jsonata:subrepo:log": "git log refs/subrepo/packages/jsonata-extended/fetch"
   },
   "keywords": [
     "jsonata",

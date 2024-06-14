@@ -26,7 +26,7 @@ The development process is largely the same as that of [jsonata-js/jsonata](http
 To bring the package up to the latest version of JSOnata, run:
 
 ```bash
-pnpm run jsonata:pull
+pnpm run jsonata:subrepo:pull
 ```
 
 ## FAQ
@@ -39,7 +39,11 @@ Regardless, changes here are kept to a minimum to make merging upstream a realis
 
 ### How can I verify the changes against [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata)?
 
-We use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to track the upstream changes. This involves bringing in all the commits on [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata) into this project.
+We use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to track the upstream changes. This involves bringing in all the commits on [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata) into this project. They can be seen by executing the following in the project root:
+
+```bash
+pnpm run jsonata:subrepo:logs
+```
 
 ### Can't I just use the canonical `jsonata` package with JSONataX instead?
 
