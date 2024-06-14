@@ -39,11 +39,22 @@ Regardless, changes here are kept to a minimum to make merging upstream a realis
 
 ### How can I verify the changes against [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata)?
 
-We use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to track the upstream changes. This involves bringing in all the commits on [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata) into this project. They can be seen by executing the following in the project root:
+We use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to track the upstream changes. This involves bringing in all the commits on [jsonata-js/jsonata](https://github.com/jsonata-js/jsonata) into this project.
+
+A diff of the changes in this fork versus the upstream can be seen by executing:
+
+```bash
+pnpm run jsonata:subrepo:diff
+```
+
+
+Logs from the subrepo can be seen by executing the following in the project root:
 
 ```bash
 pnpm run jsonata:subrepo:logs
 ```
+
+
 
 ### Can't I just use the canonical `jsonata` package with JSONataX instead?
 
