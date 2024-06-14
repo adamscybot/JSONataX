@@ -1,5 +1,5 @@
 {
-  "name": "@adamscybot/modular-jsonata",
+  "name": "jsonatax",
   "description": "A lightweight wrapper for JSONata that introduces the concept of modules in order to easily & ergonomically extend it. Import other peoples JSONata modules and dynamically import them in your expressions. Define your own modules! for other people to use!.",
   "version": "0.0.1",
   "type": "module",
@@ -41,8 +41,6 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
     "eslint-plugin-security": "^3.0.0",
-    "jsonata": "^2.0.5",
-    "jsonata-src": "github:jsonata-js/jsonata",
     "prettier": "^3.2.5",
     "prettier-plugin-jsdoc": "^1.3.0",
     "semantic-release": "^23.0.5",
